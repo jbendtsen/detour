@@ -7,9 +7,6 @@
 #define WIDTH  300
 #define HEIGHT 300
 
-#define BTN_WIDTH 60
-#define BTN_HEIGHT 28
-
 #define IDC_OPENBTN   190
 #define IDC_CANCELBTN 191
 
@@ -19,6 +16,8 @@
 
 char *className = "openProcDlg";
 
+ListDesc format = {0};
+
 ProcessInfo *processes = NULL;
 ProcessInfo *selectedProc = NULL;
 
@@ -26,46 +25,32 @@ HWND procWnd = NULL, listWnd = NULL;
 HWND openBtn = NULL, cancelBtn = NULL;
 WNDCLASSEXA procWc = {0};
 
-void getProcesses() {
+int getProcesses() {
 	DWORD len = 0;
 	DWORD *pid_list = malloc(MAX_PROCS * sizeof(DWORD));
 	EnumProcesses(pid_list, MAX_PROCS, &len);
 
 	processes = calloc(len, sizeof(ProcessInfo));
-	int idx = 0;
 
 	const int proc_path_len = 0x1000;
 	char *proc_path = malloc(proc_path_len);
 
+	int idx = 0;
 	for (int i = 0; i < len; i++) {
 		// Many of the PIDs provided by EnumProcesses can't be opened, so we filter them out here
 		int pid = pid_list[i];
-		processes[i].pid = pid;
 		HANDLE proc = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, pid);
 		if (!proc)
 			continue;
 
-		LVITEMA cell = {0};
-		cell.iItem = idx++;                  // row index
-		cell.mask = LVIF_TEXT | LVIF_PARAM;  // enables strings and the ability to sort
-		cell.lParam = (LPARAM)&processes[i]; // this is what ties a listview item to its sorting information
-
-		cell.pszText = processes[i].pid_str; // the first cell will contain a string version of a PID
-		cell.cchTextMax = snprintf(cell.pszText, PI_PID_LEN, "%d", pid);
-
-		SendMessage(listWnd, LVM_INSERTITEM, 0, (LPARAM)&cell);
-
-		// At this point, 'cell' still contains its previous values.
-		cell.iSubItem = 1;                // column index
-		cell.mask = LVIF_TEXT;            // we disable LVIF_PARAM as it seems it should only be used one per row
-		cell.pszText = processes[i].name; // name of the process
-		cell.cchTextMax = PI_NAME_LEN;
-
 		// gets us the full name of the current process
-		if (!GetProcessImageFileNameA(proc, proc_path, proc_path_len))
-			errorMessage(__FILE__, __LINE__);
-
+		int res = GetProcessImageFileNameA(proc, proc_path, proc_path_len);
 		CloseHandle(proc);
+
+		if (!res) {
+			errorMessage(__FILE__, __LINE__);
+			continue;
+		}
 
 		// The name in 'proc_path' is currently represented as a path to the file,
 		//  so we find the last backslash and use the string from that point
@@ -75,40 +60,30 @@ void getProcesses() {
 		else
 			p++;
 
-		strncpy(cell.pszText, p, PI_NAME_LEN-1);
-		SendMessage(listWnd, LVM_SETITEM, 0, (LPARAM)&cell);
+		processes[idx].pid = pid;
+		snprintf(processes[idx].pid_str, PI_PID_LEN, "%d", pid);
+		strncpy(processes[idx].name, p, PI_NAME_LEN-1);
+		idx++;
 	}
 
 	free(proc_path);
 	free(pid_list);
+
+	return idx;
 }
 
-#define SORT_COLUMN 1
-#define SORT_PIDS   0
-#define SORT_NAMES  1
-#define SORT_DIR   2
-#define SORT_ASC   0
-#define SORT_DESC  2
+void setupListView(int nRows) {
+	format.row_info_size = sizeof(ProcessInfo);
+	format.n_cols = 2;
 
-int CALLBACK sortItems(LPARAM lp1, LPARAM lp2, LPARAM type) {
-	ProcessInfo *item1 = (ProcessInfo*)lp1;
-	ProcessInfo *item2 = (ProcessInfo*)lp2;
+	ProcessInfo template = {0};
+	format.field_offs[0] = FIELD_BYTEPOS(template, pid_str);
+	format.field_offs[1] = FIELD_BYTEPOS(template, name);
 
-	int diff = 0;
-	if ((type & SORT_COLUMN) == SORT_NAMES) {
-		diff = strcmp(item1->name, item2->name);
-	}
-	else {
-		diff = item1->pid - item2->pid;
-	}
-
-	if ((type & SORT_DIR) == SORT_DESC)
-		diff = -diff;
-
-	return diff;
+	createColumn(&format.columns[0], 0, "PID");
+	createColumn(&format.columns[1], 1, "Name");
+	createTable(listWnd, &format, processes, nRows);
 }
-
-int sortDir[2] = {SORT_DESC};
 
 LRESULT CALLBACK openProcWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	int res = 0;
@@ -152,10 +127,8 @@ LRESULT CALLBACK openProcWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 			   LVS_EX_FULLROWSELECT
 			);
 
-			insertLVColumn(listWnd, 0, "PID", LVCFMT_RIGHT, 50);
-			insertLVColumn(listWnd, 1, "Name", LVCFMT_LEFT, 150);
-
-			getProcesses();
+			int nRows = getProcesses();
+			setupListView(nRows);
 			break;
 		}
 		case WM_SIZE:
@@ -200,25 +173,20 @@ LRESULT CALLBACK openProcWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 			switch (code) {
 				case NM_CLICK:
 				{
-					int row = ((NMITEMACTIVATE*)lParam)->iItem;
-
-					LVITEMA item = {0};
-					item.iItem = row;
-					item.mask = LVIF_TEXT | LVIF_PARAM;
-					SendMessage(listWnd, LVM_GETITEM, 0, (LPARAM)&item);
-
-					selectedProc = (ProcessInfo*)item.lParam;
+					selectedProc = rowFromEvent(listWnd, (NMITEMACTIVATE*)lParam);
 					EnableWindow(openBtn, 1);
 					break;
 				}
+				case NM_DBLCLK:
+					if (selectedProc) {
+						useProcess(selectedProc);
+						closeProcessDialog();
+					}
+					break;
 				case LVN_COLUMNCLICK:
 				{
-					NMLISTVIEW *item = (NMLISTVIEW*)lParam;
-					int dir = (sortDir[item->iSubItem] ^= SORT_DIR); // flip the sorting direction
-					int type = dir | (item->iSubItem == 1);          // combine with the column (as a bool)
-
-					SendMessage(listWnd, LVM_SORTITEMS, type, (LPARAM)sortItems);
-					break;
+					int col = ((NMLISTVIEW*)lParam)->iSubItem;
+					sortListView(listWnd, &format, col);
 				}
 			}
 
