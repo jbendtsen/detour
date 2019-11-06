@@ -5,16 +5,26 @@
 #include <commctrl.h>
 #include <psapi.h>
 
-#define WRAP(x) x
-#define FIELD_OF(x, y) x.y
-#define FIELD_BYTEPOS(templ, field) (u64)&FIELD_OF(templ, field) - (u64)&WRAP(templ)
+typedef unsigned int u32;
+typedef unsigned long long int u64;
+
+#define FIELD_BYTEPOS(templ, field) (u64)&templ.field - (u64)&templ
+
+#define ID_FILE_OPEN       101
+#define ID_MAIN_LV         120
+#define ID_MAIN_ADDBTN     130
+#define ID_PROC_LV         140
+#define ID_PROC_OPENBTN    150
+#define ID_PROC_CANCELBTN  151
+#define ID_ADD_ADVANCEDBTN 160
+
+#define SHOW_LBL 1
+#define HIDE_LBL 0
 
 #define BTN_WIDTH 60
 #define BTN_HEIGHT 28
 
 #define MAX_COLS 10
-
-typedef unsigned long long int u64;
 
 #define PI_PID_LEN  8
 #define PI_NAME_LEN 200
@@ -51,16 +61,27 @@ typedef struct {
 	int sort_dir;
 } ListDesc;
 
-void applyNiceFont(HWND hwnd);
-void errorMessage(const char *file, int line);
+// main.c
 void useProcess(ProcessInfo *proc);
 
+// processes.c
 void openProcessDialog(HWND mainWnd);
 void closeProcessDialog(void);
 
+// add_detour.c
+void openDetourDialog(HWND mainWnd);
+void closeDetourDialog(void);
+
+// utils.c
+void applyNiceFont(HWND hwnd);
+int resizeWindow(HWND hwnd, RECT *r);
+void errorMessage(const char *file, int line);
+void showVar(const char *name, void *var, int elems);
+HWND createLabel(HWND mainWnd, int visible, char *text, int x, int y, int w, int h);
 void createColumn(LVCOLUMNA *col, int idx, char *name);
 void createTable(HWND listWnd, ListDesc *desc, void *items, int nRows);
 void sortListView(HWND listWnd, ListDesc *desc, int col);
 void *rowFromEvent(HWND listWnd, NMITEMACTIVATE *item);
+HWND createComboBox(HWND mainWnd, int x, int y, int w, int h);
 
 #endif

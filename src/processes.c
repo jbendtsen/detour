@@ -4,26 +4,21 @@
 
 #include "header.h"
 
-#define WIDTH  300
-#define HEIGHT 300
-
-#define IDC_OPENBTN   190
-#define IDC_CANCELBTN 191
-
-#define IDC_LISTVIEW 200
+#define PROC_WIDTH  300
+#define PROC_HEIGHT 300
 
 #define MAX_PROCS 1024
 
-char *className = "openProcDlg";
+char *openProcessTitle = "Open Process";
 
 ListDesc format = {0};
 
 ProcessInfo *processes = NULL;
 ProcessInfo *selectedProc = NULL;
 
-HWND procWnd = NULL, listWnd = NULL;
-HWND openBtn = NULL, cancelBtn = NULL;
-WNDCLASSEXA procWc = {0};
+static HWND dlgWnd = NULL, listWnd = NULL;
+static HWND openBtn = NULL, cancelBtn = NULL;
+static WNDCLASSEXA wc = {0};
 
 int getProcesses() {
 	DWORD len = 0;
@@ -85,7 +80,7 @@ void setupListView(int nRows) {
 	createTable(listWnd, &format, processes, nRows);
 }
 
-LRESULT CALLBACK openProcWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+LRESULT CALLBACK opendlgWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	int res = 0;
 
 	switch (uMsg) {
@@ -97,7 +92,7 @@ LRESULT CALLBACK openProcWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 				"BUTTON", "Open",
 				WS_VISIBLE | WS_CHILD,
 				10, 10, BTN_WIDTH, BTN_HEIGHT,
-				hwnd, (HMENU)IDC_OPENBTN,
+				hwnd, (HMENU)ID_PROC_OPENBTN,
 				inst, NULL
 			);
 			applyNiceFont(openBtn);
@@ -107,7 +102,7 @@ LRESULT CALLBACK openProcWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 				"BUTTON", "Cancel",
 				WS_VISIBLE | WS_CHILD,
 				10, 10, BTN_WIDTH, BTN_HEIGHT,
-				hwnd, (HMENU)IDC_CANCELBTN,
+				hwnd, (HMENU)ID_PROC_CANCELBTN,
 				inst, NULL
 			);
 			applyNiceFont(cancelBtn);
@@ -115,8 +110,8 @@ LRESULT CALLBACK openProcWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 			listWnd = CreateWindowA(
 				WC_LISTVIEW, "",
 				WS_VISIBLE | WS_CHILD | LVS_REPORT,
-				0, 0, WIDTH, HEIGHT,
-				hwnd, (HMENU)IDC_LISTVIEW,
+				0, 0, PROC_WIDTH, PROC_HEIGHT,
+				hwnd, (HMENU)ID_PROC_LV,
 				inst, NULL
 			);
 			applyNiceFont(listWnd);
@@ -156,17 +151,17 @@ LRESULT CALLBACK openProcWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 		case WM_COMMAND:
 		{
 			int id = wParam & 0xffff;
-			if (id == IDC_OPENBTN && selectedProc)
+			if (id == ID_PROC_OPENBTN && selectedProc)
 				useProcess(selectedProc);
 
-			if (id == IDC_CANCELBTN || id == IDC_OPENBTN)
+			if (id == ID_PROC_CANCELBTN || id == ID_PROC_OPENBTN)
 				closeProcessDialog();
 
 			break;
 		}
 		case WM_NOTIFY:
 		{
-			if (wParam != IDC_LISTVIEW)
+			if (wParam != ID_PROC_LV)
 				return DefWindowProc(hwnd, uMsg, wParam, lParam);
 
 			int code = ((NMHDR*)lParam)->code;
@@ -193,7 +188,7 @@ LRESULT CALLBACK openProcWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 			break;
 		}
 		case WM_CLOSE:
-			procWnd = NULL;
+			dlgWnd = NULL;
 			DestroyWindow(listWnd);
 			DestroyWindow(hwnd);
 			break;
@@ -205,36 +200,35 @@ LRESULT CALLBACK openProcWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 }
 
 void openProcessDialog(HWND mainWnd) {
-	if (procWnd)
+	if (dlgWnd)
 		return;
 
 	HINSTANCE thisMod = GetModuleHandle(NULL);
 
-	if (!procWc.cbSize) {
-		procWc.cbSize        = sizeof(WNDCLASSEXA);
-		procWc.style         = CS_GLOBALCLASS | CS_HREDRAW | CS_VREDRAW;
-		procWc.lpfnWndProc   = openProcWndProc;
-		procWc.hInstance     = thisMod;
-		procWc.hIcon         = LoadIcon(NULL, IDI_APPLICATION);
-		procWc.hCursor       = LoadCursor(NULL, IDC_ARROW);
-		procWc.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);
-		procWc.lpszMenuName  = NULL;
-		procWc.lpszClassName = className;
-		procWc.hIconSm       = LoadIcon(NULL, IDI_APPLICATION);
+	if (!wc.cbSize) {
+		wc.cbSize        = sizeof(WNDCLASSEXA);
+		wc.style         = CS_GLOBALCLASS | CS_HREDRAW | CS_VREDRAW;
+		wc.lpfnWndProc   = opendlgWndProc;
+		wc.hInstance     = thisMod;
+		wc.hIcon         = LoadIcon(NULL, IDI_APPLICATION);
+		wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
+		wc.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);
+		wc.lpszMenuName  = NULL;
+		wc.lpszClassName = openProcessTitle;
+		wc.hIconSm       = LoadIcon(NULL, IDI_APPLICATION);
 
-		RegisterClassExA(&procWc);
+		RegisterClassExA(&wc);
 	}
 
-	procWnd = CreateWindowA(
-		/*WS_EX_CLIENTEDGE,*/
-		className, "Open Process",
+	dlgWnd = CreateWindowA(
+		openProcessTitle, openProcessTitle,
 		WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-		CW_USEDEFAULT, CW_USEDEFAULT, WIDTH, HEIGHT,
+		CW_USEDEFAULT, CW_USEDEFAULT, PROC_WIDTH, PROC_HEIGHT,
 		mainWnd, NULL, thisMod, NULL
 	);
 
-	ShowWindow(procWnd, SW_SHOW);
-	UpdateWindow(procWnd);
+	ShowWindow(dlgWnd, SW_SHOW);
+	UpdateWindow(dlgWnd);
 }
 
 void closeProcessDialog() {
@@ -242,6 +236,6 @@ void closeProcessDialog() {
 		free(processes);
 		processes = NULL;
 	}
-	if (procWnd)
-		SendMessage(procWnd, WM_CLOSE, 0, 0);
+	if (dlgWnd)
+		SendMessage(dlgWnd, WM_CLOSE, 0, 0);
 }

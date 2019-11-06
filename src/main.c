@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "header.h"
 
 #define MAIN_WIDTH  480
@@ -9,31 +10,18 @@
 #define METHOD_W 80
 #define INVOC_W  70
 
-#define IDM_FILE_OPEN 101
-
-#define IDC_ADDBTN 150
-#define IDC_MAINLV 160
-
 char *progName = "Detour!";
-HWND mainWnd = NULL, tableWnd = NULL;
-HWND addBtn = NULL;
+HWND mainWnd = NULL;
+
+static HWND listWnd = NULL;
+static HWND addBtn = NULL;
 
 ListDesc detoursDesc = {0};
 
-void applyNiceFont(HWND hwnd) {
-	SendMessage(hwnd, WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), 1);
-}
-
-void errorMessage(const char *file, int line) {
-	DWORD error = GetLastError();
-	char buf[128];
-	sprintf(buf, "Error %#x (in %s:%d)\n", error, file, line);
-	MessageBoxA(NULL, buf, "WinAPI Error", MB_ICONWARNING);
-	return;
-}
-
 void useProcess(ProcessInfo *proc) {
-	SetWindowTextA(mainWnd, proc->name);
+	char title[100];
+	sprintf(title, "%s - %s", progName, proc->name);
+	SetWindowTextA(mainWnd, title);
 	EnableWindow(addBtn, 1);
 }
 
@@ -55,7 +43,7 @@ void setupDetoursTable() {
 		col->cx = col_widths[i];
 	}
 
-	createTable(tableWnd, &detoursDesc, NULL, 0);
+	createTable(listWnd, &detoursDesc, NULL, 0);
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -67,27 +55,27 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 			HMENU mainMenu = CreateMenu();
 			HMENU fileMenu = CreatePopupMenu();
 
-			AppendMenuA(fileMenu, 0, IDM_FILE_OPEN, "&Open Process");
+			AppendMenuA(fileMenu, 0, ID_FILE_OPEN, "&Open Process");
 			AppendMenuA(mainMenu, MF_POPUP, (UINT_PTR)fileMenu, "&File");
 
 			SetMenu(hwnd, mainMenu);
 
 			HINSTANCE inst = GetModuleHandle(NULL);
 
-			tableWnd = CreateWindowA(
+			listWnd = CreateWindowA(
 				WC_LISTVIEW, "",
 				WS_VISIBLE | WS_CHILD | LVS_REPORT,
 				0, 0, 200, 200,
-				hwnd, (HMENU)IDC_MAINLV,
+				hwnd, (HMENU)ID_MAIN_LV,
 				inst, NULL
 			);
-			applyNiceFont(tableWnd);
+			applyNiceFont(listWnd);
 
 			addBtn = CreateWindowA(
 				"BUTTON", "Add",
 				WS_VISIBLE | WS_CHILD,
 				10, 10, BTN_WIDTH, BTN_HEIGHT,
-				hwnd, (HMENU)IDC_ADDBTN,
+				hwnd, (HMENU)ID_MAIN_ADDBTN,
 				inst, NULL
 			);
 			applyNiceFont(addBtn);
@@ -110,22 +98,27 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
 			SetWindowPos(addBtn, NULL, addX, addY, BTN_WIDTH, BTN_HEIGHT, SWP_NOZORDER);
 
-			SetWindowPos(tableWnd, NULL, bdr, bdr, tableW, tableH, SWP_NOZORDER);
+			SetWindowPos(listWnd, NULL, bdr, bdr, tableW, tableH, SWP_NOZORDER);
 
 			int minTotalW = ENABLE_W + ADDR_W + METHOD_W + INVOC_W;
-			int methodW = SendMessage(tableWnd, LVM_GETCOLUMNWIDTH, 2, 0);
+			int methodW = SendMessage(listWnd, LVM_GETCOLUMNWIDTH, 2, 0);
 			if (methodW < METHOD_W)
-				SendMessage(tableWnd, LVM_SETCOLUMNWIDTH, 2, METHOD_W);
+				SendMessage(listWnd, LVM_SETCOLUMNWIDTH, 2, METHOD_W);
 			else if (tableW > minTotalW)
-				SendMessage(tableWnd, LVM_SETCOLUMNWIDTH, 2, METHOD_W + tableW - minTotalW);
+				SendMessage(listWnd, LVM_SETCOLUMNWIDTH, 2, METHOD_W + tableW - minTotalW);
 
 			break;
 		}
 		case WM_COMMAND:
 		{
 			int cmd = wParam & 0xffff;
-			if (cmd == IDM_FILE_OPEN) {
+			if (cmd == ID_FILE_OPEN) {
 				openProcessDialog(hwnd);
+				res = 1;
+				break;
+			}
+			if (cmd == ID_MAIN_ADDBTN) {
+				openDetourDialog(hwnd);
 				res = 1;
 				break;
 			}
@@ -134,6 +127,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 		}
 		case WM_CLOSE:
 			closeProcessDialog();
+			closeDetourDialog();
 			DestroyWindow(hwnd);
 			break;
 		case WM_DESTROY:
@@ -149,7 +143,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
 	INITCOMMONCONTROLSEX ctrls = {0};
-	ctrls.dwICC = ICC_LISTVIEW_CLASSES;
+	ctrls.dwICC = ICC_LISTVIEW_CLASSES | ICC_TREEVIEW_CLASSES;
 	ctrls.dwSize = sizeof(INITCOMMONCONTROLSEX);
 	InitCommonControlsEx(&ctrls);
 
@@ -179,7 +173,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	ShowWindow(mainWnd, nCmdShow);
 	UpdateWindow(mainWnd);
 
-	ACCEL openProcAccel = {FVIRTKEY | FCONTROL, 'O', IDM_FILE_OPEN};
+	ACCEL openProcAccel = {FVIRTKEY | FCONTROL, 'O', ID_FILE_OPEN};
 	HACCEL accels = CreateAcceleratorTable(&openProcAccel, 1);
 
 	MSG Msg;
