@@ -6,10 +6,6 @@ void applyNiceFont(HWND hwnd) {
 	SendMessage(hwnd, WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), 1);
 }
 
-int resizeWindow(HWND hwnd, RECT *r) {
-	return SetWindowPos(hwnd, NULL, r->left, r->top, r->right-r->left, r->bottom-r->top, SWP_NOZORDER);
-}
-
 void errorMessage(const char *file, int line) {
 	DWORD error = GetLastError();
 	char buf[128];
@@ -25,8 +21,8 @@ void showVar(const char *name, void *var, int elems) {
 	char *msg = malloc(name_len + 20 * elems);
 	if (!var)
 		sprintf(msg, "%s = NULL", name);
-	else if ((u32)var < 0x1000)
-		sprintf(msg, "%s = %#x", name, (u32)var);
+	else if ((ULONG_PTR)var < 0x1000)
+		sprintf(msg, "%s = %#x", name, (ULONG_PTR)var);
 	else {
 		u32 *p = (u32*)var;
 		int len = sprintf(msg, "%s = %#x", name, *p++);
@@ -51,6 +47,19 @@ HWND createLabel(HWND mainWnd, int visible, char *text, int x, int y, int w, int
 
 	applyNiceFont(lbl);
 	return lbl;
+}
+
+HWND createButton(LONG_PTR id, HWND mainWnd, char *text, int x, int y) {
+	HWND btn = CreateWindowA(
+		"BUTTON", text,
+		WS_VISIBLE | WS_CHILD,
+		x, y, BTN_WIDTH, BTN_HEIGHT,
+		mainWnd, (HMENU)id,
+		GetModuleHandle(NULL), NULL
+	);
+
+	applyNiceFont(btn);
+	return btn;
 }
 
 // List-View helper functions
@@ -133,12 +142,12 @@ void *rowFromEvent(HWND listWnd, NMITEMACTIVATE *item) {
 
 // Combo-Box helper functions
 
-HWND createComboBox(HWND mainWnd, int x, int y, int w, int h) {
+HWND createComboBox(LONG_PTR id, HWND mainWnd, int x, int y, int w, int h) {
 	HWND cbWnd = CreateWindowA(
 		WC_COMBOBOX, "",
 		WS_VISIBLE | WS_CHILD | CBS_DROPDOWN | CBS_HASSTRINGS,
 		x, y, w, h,
-		mainWnd, NULL,
+		mainWnd, (HMENU)id,
 		GetModuleHandle(NULL), NULL
 	);
 	applyNiceFont(cbWnd);

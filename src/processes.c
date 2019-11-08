@@ -56,8 +56,8 @@ int getProcesses() {
 			p++;
 
 		processes[idx].pid = pid;
-		snprintf(processes[idx].pid_str, PI_PID_LEN, "%d", pid);
-		strncpy(processes[idx].name, p, PI_NAME_LEN-1);
+		snprintf(processes[idx].pid_str, LV_PID_LEN, "%d", pid);
+		strncpy(processes[idx].name, p, LV_PROC_LEN-1);
 		idx++;
 	}
 
@@ -88,24 +88,9 @@ LRESULT CALLBACK opendlgWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 		{
 			HINSTANCE inst = GetModuleHandle(NULL);
 
-			openBtn = CreateWindowA(
-				"BUTTON", "Open",
-				WS_VISIBLE | WS_CHILD,
-				10, 10, BTN_WIDTH, BTN_HEIGHT,
-				hwnd, (HMENU)ID_PROC_OPENBTN,
-				inst, NULL
-			);
-			applyNiceFont(openBtn);
+			cancelBtn = createButton(ID_PROC_CANCELBTN, hwnd, "Cancel", 10, 10);
+			openBtn = createButton(ID_PROC_OPENBTN, hwnd, "Open", 10, 10);
 			EnableWindow(openBtn, 0);
-
-			cancelBtn = CreateWindowA(
-				"BUTTON", "Cancel",
-				WS_VISIBLE | WS_CHILD,
-				10, 10, BTN_WIDTH, BTN_HEIGHT,
-				hwnd, (HMENU)ID_PROC_CANCELBTN,
-				inst, NULL
-			);
-			applyNiceFont(cancelBtn);
 
 			listWnd = CreateWindowA(
 				WC_LISTVIEW, "",
@@ -117,9 +102,9 @@ LRESULT CALLBACK opendlgWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 			applyNiceFont(listWnd);
 			SendMessage(
 				listWnd,
-			   LVM_SETEXTENDEDLISTVIEWSTYLE,
-			   LVS_EX_FULLROWSELECT,
-			   LVS_EX_FULLROWSELECT
+				LVM_SETEXTENDEDLISTVIEWSTYLE,
+				LVS_EX_FULLROWSELECT,
+				LVS_EX_FULLROWSELECT
 			);
 
 			int nRows = getProcesses();

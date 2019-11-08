@@ -1,7 +1,7 @@
 #include "header.h"
 
 #define ADDDETOUR_WIDTH  300
-#define ADDDETOUR_HEIGHT 300
+#define ADDDETOUR_HEIGHT 260
 
 #define N_ADV_WNDS 7
 
@@ -39,19 +39,30 @@ static HWND advancedList[N_ADV_WNDS] = {NULL};
 
 static int expandH = 0;
 
+void shiftWndUpDown(HWND hwnd, int displ) {
+	RECT r = {0};
+	GetWindowRect(hwnd, &r);
+
+	r.bottom += displ;
+
+	SetWindowPos(
+		hwnd, NULL,
+		r.left, r.top,
+		r.right - r.left, r.bottom - r.top,
+		SWP_NOZORDER
+	);
+}
+
 void tryExpand(HWND hwnd) {
 	if (expandH)
 		return;
 
-	for (int i = 0; i < N_ADV_WNDS; i++)
-		ShowWindow(advancedList[i], SW_SHOW);
-
 	expandH = EXPAND_H;
 
-	RECT r = {0};
-	GetWindowRect(dlgWnd, &r);
-	r.bottom += expandH;
-	resizeWindow(dlgWnd, &r);
+	shiftWndUpDown(dlgWnd, expandH);
+
+	for (int i = 0; i < N_ADV_WNDS; i++)
+		ShowWindow(advancedList[i], SW_SHOW);
 }
 
 void tryCollapse(HWND hwnd) {
@@ -61,10 +72,7 @@ void tryCollapse(HWND hwnd) {
 	for (int i = 0; i < N_ADV_WNDS; i++)
 		ShowWindow(advancedList[i], SW_HIDE);
 
-	RECT r = {0};
-	GetWindowRect(dlgWnd, &r);
-	r.bottom -= expandH;
-	resizeWindow(dlgWnd, &r);
+	shiftWndUpDown(dlgWnd, -expandH);
 
 	expandH = 0;
 }
@@ -81,21 +89,40 @@ LRESULT CALLBACK dlgWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			methodLbl = createLabel(hwnd, SHOW_LBL, "Method:",      10, 30, 50, 20);
 			addrsLbl  = createLabel(hwnd, SHOW_LBL, "Address(es):", 10, 50, 70, 20);
 
-			dllCb = createComboBox(hwnd, 50, 10, 70, 20);
+			dllCb = createComboBox(ID_ADD_DLLCB, hwnd, 90, 10, 190, 200);
+			DllInfo *dll = refreshDllList();
+			while (dll) {
+				SendMessage(dllCb, CB_ADDSTRING, 0, (LPARAM)dll->name);
+				dll = dll->next;
+			}
+			SendMessage(dllCb, CB_ADDSTRING, 0, (LPARAM)"Add New...");
 
-			invocLbl  = createLabel(hwnd, HIDE_LBL, "Invocation:",   10, 100, 70, 20);
-			sbLbl     = createLabel(hwnd, HIDE_LBL, "Stack Balance", 10, 120, 80, 20);
-			beforeLbl = createLabel(hwnd, HIDE_LBL, "Before:",       20, 140, 50, 20);
-			afterLbl  = createLabel(hwnd, HIDE_LBL, "After:",        20, 160, 50, 20);
+			addrsEd = CreateWindowA(
+				"EDIT", "",
+				WS_CHILD | WS_VISIBLE | WS_BORDER | ES_MULTILINE,
+				90, 50, 190, 140,
+				hwnd, (HMENU)ID_ADD_ADDRSEDIT,
+				inst, NULL
+			);
+			applyNiceFont(addrsEd);
+
+			cancelBtn = createButton(ID_ADD_CANCELBTN, hwnd, "Cancel", 220, 200);
+			addBtn    = createButton(ID_ADD_ADDBTN, hwnd, "Add", 150, 200);
+			EnableWindow(addBtn, 0);
 
 			advancedBtn = CreateWindowA(
 				"BUTTON", "Advanced",
 				WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-				10, 70, 70, 20,
+				10, 170, 70, 20,
 				hwnd, (HMENU)ID_ADD_ADVANCEDBTN,
 				inst, NULL
 			);
 			applyNiceFont(advancedBtn);
+
+			invocLbl  = createLabel(hwnd, HIDE_LBL, "Invocation:",   10, 205, 70, 20);
+			sbLbl     = createLabel(hwnd, HIDE_LBL, "Stack Balance", 10, 225, 80, 20);
+			beforeLbl = createLabel(hwnd, HIDE_LBL, "Before:",       20, 245, 50, 20);
+			afterLbl  = createLabel(hwnd, HIDE_LBL, "After:",        20, 265, 50, 20);
 
 			advancedList[0] = invocLbl;
 			advancedList[1] = invocCb;
@@ -109,7 +136,17 @@ LRESULT CALLBACK dlgWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 		}
 		case WM_SIZE:
 		{
-			
+			RECT r = {0};
+			GetClientRect(hwnd, &r);
+			SetWindowPos(cancelBtn, NULL, r.right -  72, r.bottom - 35, BTN_WIDTH, BTN_HEIGHT, SWP_NOZORDER);
+			SetWindowPos(addBtn,    NULL, r.right - 142, r.bottom - 35, BTN_WIDTH, BTN_HEIGHT, SWP_NOZORDER);
+			break;
+		}
+		case WM_GETMINMAXINFO:
+		{
+			LPMINMAXINFO lpMMI = (LPMINMAXINFO)lParam;
+			lpMMI->ptMinTrackSize.x = ADDDETOUR_WIDTH;
+			lpMMI->ptMinTrackSize.y = ADDDETOUR_HEIGHT;
 			break;
 		}
 		case WM_COMMAND:
@@ -123,7 +160,27 @@ LRESULT CALLBACK dlgWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				else
 					tryCollapse(hwnd);
 			}
-			break;
+
+			if (wndId == ID_ADD_DLLCB && code == CBN_SELCHANGE) {
+				int idx = SendMessage(dllCb, CB_GETCURSEL, 0, 0);
+				int n_items = SendMessage(dllCb, CB_GETCOUNT, 0, 0);
+				/*
+				// "Add New..."
+				if (idx == n_items-1) {
+					char *dll_file = openFileDialog();
+					if (dll_file != NULL) {
+						insertDll(dll_file);
+						refreshDllCombobox();
+						// set selected item to be of the 2nd last index
+					}
+					else {
+						// revert selection
+					}
+				}
+				*/
+			}
+
+			return DefWindowProc(hwnd, uMsg, wParam, lParam);
 		}
 		case WM_CLOSE:
 			dlgWnd = NULL;
