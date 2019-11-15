@@ -11,6 +11,7 @@
 #define INVOC_W  70
 
 char *progName = "Detour!";
+ULONG_PTR ctxCookie = 0;
 HWND mainWnd = NULL;
 
 static HWND listWnd = NULL;
@@ -128,6 +129,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 		case WM_CLOSE:
 			closeProcessDialog();
 			closeDetourDialog();
+			DeactivateActCtx(0, ctxCookie);
 			DestroyWindow(hwnd);
 			break;
 		case WM_DESTROY:
@@ -142,10 +144,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
-	INITCOMMONCONTROLSEX ctrls = {0};
-	ctrls.dwICC = ICC_LISTVIEW_CLASSES | ICC_TREEVIEW_CLASSES;
-	ctrls.dwSize = sizeof(INITCOMMONCONTROLSEX);
-	InitCommonControlsEx(&ctrls);
+	ctxCookie = enableVisualStyles();
 
 	WNDCLASSEXA wc;
 	wc.cbSize        = sizeof(WNDCLASSEXA);

@@ -22,6 +22,7 @@ typedef unsigned long long int u64;
 #define ID_ADD_ADDRSEDIT   163
 #define ID_ADD_ADDBTN      164
 #define ID_ADD_CANCELBTN   165
+#define ID_ADD_DLLBTN      166
 
 #define SHOW_LBL 1
 #define HIDE_LBL 0
@@ -98,11 +99,13 @@ void openDetourDialog(HWND mainWnd);
 void closeDetourDialog(void);
 
 // utils.c
+ULONG_PTR enableVisualStyles(void);
 void applyNiceFont(HWND hwnd);
 void errorMessage(const char *file, int line);
 void showVar(const char *name, void *var, int elems);
 HWND createLabel(HWND mainWnd, int visible, char *text, int x, int y, int w, int h);
 HWND createButton(LONG_PTR id, HWND mainWnd, char *text, int x, int y);
+HWND createButtonEx(LONG_PTR id, HWND mainWnd, char *text, int x, int y, int w, int h);
 void createColumn(LVCOLUMNA *col, int idx, char *name);
 void createTable(HWND listWnd, ListDesc *desc, void *items, int nRows);
 void sortListView(HWND listWnd, ListDesc *desc, int col);

@@ -2,8 +2,27 @@
 #include <stdlib.h>
 #include "header.h"
 
+#define RESID_SHELL32 124
+
 void applyNiceFont(HWND hwnd) {
 	SendMessage(hwnd, WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), 1);
+}
+
+ULONG_PTR enableVisualStyles() {
+	ACTCTXA ctx = {0};
+	ctx.cbSize  = sizeof(ACTCTXA);
+	ctx.dwFlags = ACTCTX_FLAG_RESOURCE_NAME_VALID | ACTCTX_FLAG_SET_PROCESS_DEFAULT | ACTCTX_FLAG_ASSEMBLY_DIRECTORY_VALID;
+	ctx.lpSource = "shell32.dll";
+	ctx.lpAssemblyDirectory = "C:\\Windows\\System32";
+	ctx.lpResourceName = (LPCSTR)RESID_SHELL32;
+
+	HANDLE active = CreateActCtxA(&ctx);
+
+	ULONG_PTR cookie = 0;
+	ActivateActCtx(active, &cookie);
+
+	InitCommonControls();
+	return cookie;
 }
 
 void errorMessage(const char *file, int line) {
@@ -54,6 +73,19 @@ HWND createButton(LONG_PTR id, HWND mainWnd, char *text, int x, int y) {
 		"BUTTON", text,
 		WS_VISIBLE | WS_CHILD,
 		x, y, BTN_WIDTH, BTN_HEIGHT,
+		mainWnd, (HMENU)id,
+		GetModuleHandle(NULL), NULL
+	);
+
+	applyNiceFont(btn);
+	return btn;
+}
+
+HWND createButtonEx(LONG_PTR id, HWND mainWnd, char *text, int x, int y, int w, int h) {
+	HWND btn = CreateWindowA(
+		"BUTTON", text,
+		WS_VISIBLE | WS_CHILD,
+		x, y, w, h,
 		mainWnd, (HMENU)id,
 		GetModuleHandle(NULL), NULL
 	);
